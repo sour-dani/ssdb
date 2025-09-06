@@ -1,5 +1,5 @@
 [config]
-; IMPORTANT! Put bot token here
+; IMPORTANT! Put bot token here.
 token=
 ; IMPORTANT! Put the channel id here that the bot will use and print the server list to.
 channel=
@@ -37,6 +37,5 @@ upper_format={players}/{max_players} | {name}
 ; Source code repo can be found at: https://github.com/sour-dani/steamconnect
 lower_format=Map: {map} | Connect: `connect {address}`
 ;lower_format=Map: {map} | Connect: [{address}](https://sour-dani.github.io/steamconnect/?{address})
-; Set the logging level. Follows standard logging library levels. Defaults to warning.
-; debug <- info <- warning <- error <- critical
-logging=warning
+; Set the logging level. Follows standard logging library levels. Defaults to INFO.
+logging=INFO

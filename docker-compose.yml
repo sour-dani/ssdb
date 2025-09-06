@@ -1,4 +1,3 @@
-version: "3"
 services:
   ssdb:
     build: ./
@@ -6,3 +5,7 @@ services:
       - type: bind
         source: ./.ssdb_config.ini
         target: /app/.ssdb_config.ini
+        read_only: true
+      - type: bind
+        source: ./.persistent_lastmsg.txt
+        target: /app/.persistent_lastmsg.txt
