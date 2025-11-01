@@ -26,7 +26,7 @@ docker compose up
 
 ## Running manually
 
-Use Python 3.13
+Use Python 3.14
 
 ```bash
 # Install dependencies
