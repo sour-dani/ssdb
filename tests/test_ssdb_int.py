@@ -13,7 +13,7 @@ class _TestQuerier(_QuerierInterface):
                       max_total_query_time: float) -> list[ServerData]:
         return [ServerData(addr) for addr in addresses if addr in self._ADDR_TO_RETURN]
 
-    def query_masterserver(self, gamedir: str,
+    def query_masterserver(self, webapi_key: str, gamedir: str,
                            max_ms_query_time: float | int) -> list[Address]:
         return self._ADDR_TO_RETURN
 
@@ -38,7 +38,7 @@ def test_querysystem_list():
 
 def test_querysystem_ms():
     """Query masterserver using gamedir."""
-    query_system = QuerySystem(querier=_TestQuerier(), gamedir="cstrike")
+    query_system = QuerySystem(querier=_TestQuerier(), gamedir="cstrike", webapi_key="webapi_key")
 
     async def run_co():
         loop = asyncio.get_event_loop()
@@ -56,7 +56,7 @@ def test_querysystem_ms():
 def test_querysystem_blacklist_port():
     """Blacklist a server with a port."""
     query_system = QuerySystem(querier=_TestQuerier(
-    ), gamedir="cstrike", blacklist=[("127.0.0.2", 27015)])
+    ), gamedir="cstrike", webapi_key="webapi_key", blacklist=[("127.0.0.2", 27015)])
 
     async def run_co():
         loop = asyncio.get_event_loop()
@@ -74,7 +74,7 @@ def test_querysystem_blacklist_port():
 def test_querysystem_blacklist_noport():
     """Blacklist a server without a port."""
     query_system = QuerySystem(querier=_TestQuerier(
-    ), gamedir="cstrike", blacklist=[("127.0.0.3", 0)])
+    ), gamedir="cstrike", webapi_key="webapi_key", blacklist=[("127.0.0.3", 0)])
 
     async def run_co():
         loop = asyncio.get_event_loop()
@@ -92,7 +92,7 @@ def test_querysystem_blacklist_noport():
 def test_querysystem_update_interval():
     """Update interval works."""
     query_system = QuerySystem(querier=_TestQuerier(
-    ), gamedir="cstrike", query_interval=0.25)
+    ), gamedir="cstrike", webapi_key="webapi_key", query_interval=0.25)
 
     async def run_co():
         loop = asyncio.get_event_loop()
@@ -134,6 +134,7 @@ def test_querysystem_last_list_ms():
     query_system = QuerySystem(
         querier=_TestQuerier(),
         gamedir="cstrike",
+        webapi_key="webapi_key",
         query_interval=-0.1,  # Query constantly
         ms_query_interval=0.1)  # Query master server after 0.1 seconds.
 

@@ -1,8 +1,10 @@
 """SSDB unit tests."""
 import time
+import json
 from configparser import ConfigParser
 from pytest import mark
-from ssdb import ServerList, ServerData, address_equals, _address_to_str, parse_config, _parse_ips
+from ssdb import Address, ServerList, ServerData, _parse_ms_response, address_equals, \
+    _address_to_str, parse_config, _parse_ips
 
 
 @mark.parametrize("a,b", [
@@ -172,6 +174,7 @@ token=token
 channel=1
 serverlist=127.0.0.1:27015,127.0.0.2:27016
 gamedir=gamedir
+steam_webapi_key=steam_webapi_key
 blacklist=127.0.0.3,127.0.0.4:27015
 embed_title=embed_title
 embed_color=0x101010
@@ -190,6 +193,7 @@ logging=WARNING
     assert ("127.0.0.1", 27015) in config.whitelist
     assert ("127.0.0.2", 27016) in config.whitelist
     assert config.gamedir == "gamedir"
+    assert config.steam_webapi_key == "steam_webapi_key"
     assert ("127.0.0.3", 0) in config.blacklist
     assert ("127.0.0.4", 27015) in config.blacklist
     assert config.embed_title == "embed_title"
@@ -202,3 +206,29 @@ logging=WARNING
     assert config.upper_format == "upper_format"
     assert config.lower_format == "lower_format"
     assert config.log_level == "WARNING"
+
+
+@mark.parametrize("jsn,expected", [
+    ("""
+    {
+        "response": {
+            "servers": [
+                {
+                    "addr": "127.0.0.1:27015"
+                },
+                {
+                    "addr": "127.0.0.2:27018"
+                }
+            ]
+        }
+    }
+    """, [('127.0.0.1', 27015), ('127.0.0.2', 27018)])
+])
+def test_parse_ms_response(jsn: str, expected: list[Address]):
+    """Parse master server response."""
+    obj = json.loads(jsn)
+    result = _parse_ms_response(obj)
+    assert result
+    assert len(result) == len(expected)
+    for addr in expected:
+        assert addr in result

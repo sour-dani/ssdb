@@ -1,4 +1,5 @@
 """Source Servers Discord Bot"""
+from collections.abc import Iterable
 from dataclasses import dataclass
 import time
 import configparser
@@ -7,8 +8,8 @@ import socket
 import logging
 import asyncio
 import discord
-import steam.game_servers
 import a2s
+import requests
 
 
 logger = logging.getLogger(__name__)
@@ -192,7 +193,8 @@ class _QuerierInterface():
                       max_total_query_time: float) -> list[ServerData]:
         """Query a list of game servers."""
 
-    def query_masterserver(self, gamedir: str, max_ms_query_time: float | int) -> list[Address]:
+    def query_masterserver(self, webapi_key: str, gamedir: str,
+                           max_ms_query_time: float | int) -> list[Address]:
         """Queries the Source master server list and returns all addresses found. Should keep these
         queries to the minimum, or you get timed out."""
 
@@ -204,8 +206,9 @@ class QuerierImpl(_QuerierInterface):
                       max_total_query_time: float) -> list[ServerData]:
         return _query_servers(addresses, max_total_query_time)
 
-    def query_masterserver(self, gamedir: str, max_ms_query_time: float | int) -> list[Address]:
-        return _query_masterserver(gamedir, max_ms_query_time)
+    def query_masterserver(self, webapi_key: str, gamedir: str,
+                           max_ms_query_time: float | int) -> list[Address]:
+        return _query_masterserver(webapi_key, gamedir, max_ms_query_time)
 
 
 @dataclass
@@ -217,6 +220,7 @@ class SSDBConfig:
     """Discord channel id"""
     whitelist: list[Address] | None = None
     gamedir: str | None = None
+    steam_webapi_key: str = ""
     blacklist: list[Address] | None = None
     embed_title: str = ""
     embed_max: int = 5
@@ -239,17 +243,21 @@ class QuerySystem():
                  max_ms_query_time: float | None = None,
                  whitelist: list[Address] | None = None,
                  gamedir: str | None = None,
+                 webapi_key: str | None = None,
                  blacklist: list[Address] | None = None,
                  query_interval: float | None = None,
                  max_unresponsive_time: float | None = None,
                  ms_query_interval: float | None = None,
                  max_total_query_time: float | int | None = None):
         assert whitelist or gamedir, "You must have serverlist (a whitelist) or gamedir configured!"
+        if gamedir:
+            assert webapi_key, "You must have webapi_key configured!"
         self._num_offline = 0
         self._querier = querier
         self._server_list = ServerList()
         self._whitelist = whitelist
         self._gamedir = gamedir
+        self._webapi_key = webapi_key
         self._blacklist = blacklist or []
         self._max_ms_query_time = max_ms_query_time or 30.0
         self._query_interval = query_interval or 30.0
@@ -301,7 +309,8 @@ class QuerySystem():
             assert self._gamedir
             addresses = await loop.run_in_executor(
                 None,
-                self._querier.query_masterserver, self._gamedir, self._max_ms_query_time)
+                self._querier.query_masterserver,
+                self._webapi_key, self._gamedir, self._max_ms_query_time)
             addresses = [
                 address for address in addresses if not self._is_blacklisted(address)]
             self._last_ms_query_time = time.time()
@@ -408,23 +417,56 @@ def _query_servers(addresses: list[Address], max_total_query_time: float):
     return lst
 
 
-def _query_masterserver(gamedir: str, max_ms_query_time: float | int):
+def _query_masterserver(webapi_key: str,
+                        gamedir: str,
+                        max_ms_query_time: float | int) -> list[Address]:
     logger.info("Querying masterserver...")
 
-    lst: list[Address] = []
-
     try:
-        query_start = time.time()
+        response = requests.get(
+            "https://api.steampowered.com/IGameServersService/GetServerList/v1/",
+            params={
+                "key": webapi_key,
+                "filter": "\\gamedir\\" + gamedir
+            },
+            timeout=max_ms_query_time)
 
-        for address in steam.game_servers.query_master("\\gamedir\\" + gamedir):
-            lst.append((address[0], int(address[1])))
+        if not response.ok:
+            logger.error(
+                "Master server returned an error. Response: %s", response)
+            return []
 
-            if (time.time() - query_start) > max_ms_query_time:
-                break
-    except (OSError, ConnectionError, RuntimeError) as e:
+        obj = response.json()
+
+        parsed = _parse_ms_response(obj)
+        if not parsed:
+            logger.error("Failed to parse master server response: %s", obj)
+            return []
+        return parsed
+    except Exception as e:  # pylint: disable=W0718
         logger.error(
-            "Connection error querying master server: %s", e)
+            "Failed to query master server: %s", e)
 
+    return []
+
+
+def _parse_ms_response(json):
+    if "response" not in json:
+        return None
+    if "servers" not in json["response"]:
+        return None
+    if not isinstance(json["response"]["servers"], Iterable):
+        return None
+    lst: list[Address] | None = None
+    for server in json["response"]["servers"]:
+        if "addr" not in server:
+            continue
+        splt = str(server["addr"]).rsplit(":", maxsplit=1)
+        ip = splt[0]
+        port = int(splt[1])
+        if lst is None:
+            lst = []
+        lst.append((ip, port))
     return lst
 
 
@@ -500,9 +542,12 @@ def parse_config(prsr: configparser.ConfigParser):
     channel_id = prsr.getint("config", "channel", fallback=None)
     whitelist = _parse_ips(prsr.get("config", "serverlist", fallback=None))
     gamedir = prsr.get("config", "gamedir", fallback=None)
+    steam_webapi_key = prsr.get("config", "steam_webapi_key", fallback=None)
 
     assert token and channel_id, "You must configure Discord token and channel!"
     assert whitelist or gamedir, "You must configure one list method, 'serverlist' or 'gamedir'!"
+    if gamedir:
+        assert steam_webapi_key, "You must configure 'steam_webapi_key' if you are using 'gamedir'!"
 
     embed_title = prsr.get("config", "embed_title", fallback="Servers")
 
@@ -535,7 +580,7 @@ def parse_config(prsr: configparser.ConfigParser):
     blacklist = _parse_ips(prsr.get("config", "blacklist", fallback=None))
     log_level = prsr.get("config", "logging", fallback="").upper()
     return SSDBConfig(token=token, channel_id=channel_id, gamedir=gamedir,
-                      whitelist=whitelist,
+                      steam_webapi_key=steam_webapi_key, whitelist=whitelist,
                       embed_title=embed_title, embed_max=embed_max, embed_color=embed_color,
                       max_total_query_time=max_total_query_time,
                       query_interval=query_interval,

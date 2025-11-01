@@ -7,6 +7,8 @@ channel=
 serverlist=
 ; If this is set, master server is queried for a specific game with the given game directory. Can be left empty if serverlist is used. (Example: cstrike)
 gamedir=
+; If you have set the "gamedir" parameter, you must configure a Steam WebAPI key here, which you can get here: https://steamcommunity.com/dev/
+steam_webapi_key=
 ; Blacklist servers by IP. Separate by comma, port is optional. (Example: 127.0.0.0,127.0.0.1:27015)
 blacklist=
 embed_title=Servers

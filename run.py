@@ -29,6 +29,7 @@ class SSDBClient(discord.Client):
         self._num_other_msgs = 0  # How many messages between our msg and now
         self._persistent_msg_id = read_persisted_msg_id()
         self._query_system = QuerySystem(gamedir=self._config.gamedir,
+                                         webapi_key=self._config.steam_webapi_key,
                                          whitelist=self._config.whitelist,
                                          blacklist=self._config.blacklist,
                                          max_ms_query_time=self._config.max_total_query_time,
